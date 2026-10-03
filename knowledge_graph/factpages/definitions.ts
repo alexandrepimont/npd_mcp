@@ -5,9 +5,9 @@ export type FactpagesTableMetadata = {
   category: 'time_window' | 'all_tables';
   explanation: string;
   aiSummary: string;
-  relatedTerms: string[];
-  useCases: string[];
-  queryHints: string[];
+  relatedTerms: readonly string[];
+  useCases: readonly string[];
+  queryHints: readonly string[];
   urlTemplate: string;
   source: string;
 };
@@ -17,7 +17,7 @@ export type FactpagesGroupMetadata = {
   label: string;
   description: string;
   aiPurpose: string;
-  tables: FactpagesTableMetadata[];
+  tables: readonly FactpagesTableMetadata[];
 };
 
 export type FactpagesSectionMetadata = {
@@ -26,8 +26,8 @@ export type FactpagesSectionMetadata = {
   description: string;
   aiPurpose: string;
   status: 'implemented' | 'planned';
-  groups: FactpagesGroupMetadata[];
-  tables: FactpagesTableMetadata[];
+  groups: readonly FactpagesGroupMetadata[];
+  tables: readonly FactpagesTableMetadata[];
 };
 
 export function flattenFactpagesSectionTables(section: FactpagesSectionMetadata): FactpagesTableMetadata[] {

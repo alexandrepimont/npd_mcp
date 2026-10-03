@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "tsx src/app/main.ts",
+    "test": "tsx --test test/**/*.test.ts",
+    "knowledge:factpages": "tsx knowledge_graph/scripts/print_factpages_knowledge.ts"
   },
   "repository": {
     "type": "git",
@@ -20,6 +22,12 @@
   "homepage": "https://github.com/alexandrepimont/npd_mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.0",
-    "dotenv": "^18.0.5"
+    "dotenv": "^18.0.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2"
   }
 }

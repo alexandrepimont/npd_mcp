@@ -27,6 +27,7 @@ Runtime flow:
 1. [config.yaml](config.yaml): MCP client/server runtime configuration.
 2. [package.json](package.json): scripts and dependencies.
 3. [READ.md](READ.md): architecture and file-focus documentation.
+4. [README.md](README.md): default project documentation entrypoint.
 
 ### Source Runtime
 
