@@ -6,7 +6,7 @@ This project exposes Norway SODIR/NPD FactPages tables as a reliable MCP server,
 
 1. Table discovery.
 2. Table fetch as structured rows.
-3. Deterministic business summaries over wellbore data.
+3. Deterministic table enrichment and join reachability planning over wellbore data.
 
 ## Simplified Architecture
 
@@ -16,8 +16,8 @@ Runtime flow:
 2. [src/transport/stdio.ts](src/transport/stdio.ts) connects stdio transport.
 3. [src/mcp/server.ts](src/mcp/server.ts) defines MCP tools and shared safe response behavior.
 4. [src/factpages/client.ts](src/factpages/client.ts) resolves table routes, builds URLs, fetches CSV, parses rows.
-5. [src/domain/wellbore/business.ts](src/domain/wellbore/business.ts) maps a question to metric + table and computes output.
-6. [src/semantic/metrics.ts](src/semantic/metrics.ts) contains deterministic metric definitions.
+5. [src/domain/wellbore/business.ts](src/domain/wellbore/business.ts) plans table enrichment and join reachability for a selected wellbore table.
+6. [src/semantic/metrics.ts](src/semantic/metrics.ts) remains a supporting metric catalog for legacy deterministic summaries.
 7. [knowledge_graph/factpages/wellbore/tables.ts](knowledge_graph/factpages/wellbore/tables.ts) is the active metadata source for supported tables.
 
 ## File Focus
@@ -35,8 +35,8 @@ Runtime flow:
 2. [src/transport/stdio.ts](src/transport/stdio.ts): MCP stdio server startup.
 3. [src/mcp/server.ts](src/mcp/server.ts): tool registration, zod input schemas, shared MCP-safe success/error responses.
 4. [src/factpages/client.ts](src/factpages/client.ts): table key normalization, route resolution, URL construction, HTTP fetch with timeout, CSV parsing.
-5. [src/domain/wellbore/business.ts](src/domain/wellbore/business.ts): question planning and deterministic business answer generation with provenance.
-6. [src/semantic/metrics.ts](src/semantic/metrics.ts): semantic signals and metric computation catalog.
+5. [src/domain/wellbore/business.ts](src/domain/wellbore/business.ts): table enrichment planning and join reachability generation with provenance.
+6. [src/semantic/metrics.ts](src/semantic/metrics.ts): legacy signal catalog and metric computations retained for compatibility.
 
 ### Knowledge Graph Core
 
@@ -68,12 +68,16 @@ Runtime flow:
 
 ### Tests
 
-1. [test/factpages.test.ts](test/factpages.test.ts): knowledge graph integrity, URL builder, CSV parsing, and validation tests.
-2. [test/business.test.ts](test/business.test.ts): planning behavior and deterministic business answer tests.
+1. [test/unit/factpages-client.unit.test.ts](test/unit/factpages-client.unit.test.ts): unit tests for URL building, CSV parsing, and validation helpers.
+2. [test/integration/knowledge-graph.integration.test.ts](test/integration/knowledge-graph.integration.test.ts): integration checks for FactPages section metadata completeness.
+3. [test/integration/wellbore-business.integration.test.ts](test/integration/wellbore-business.integration.test.ts): integration tests for join planning and table enrichment reachability.
+4. [test/e2e/mcp-tools.e2e.test.ts](test/e2e/mcp-tools.e2e.test.ts): end-to-end MCP tool calls through in-memory client/server transports.
+5. [test/business/question-answering.business.test.ts](test/business/question-answering.business.test.ts): business-focused tool tests that verify table enrichment and join reachability behavior.
 
 ## Current Simplification Rules
 
 1. Keep tools small and table-oriented.
 2. Keep all tool errors structured via a single MCP error shape.
 3. Keep transport bootstrapping separate from tool registration.
-4. Keep business logic deterministic and testable without live network data.
+4. Keep join planning deterministic and testable without live network data.
+5. Prefer enriching a base table and exposing reachable related tables instead of answering a single ad hoc question.

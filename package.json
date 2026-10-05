@@ -6,7 +6,9 @@
   "scripts": {
     "start": "tsx src/app/main.ts",
     "test": "tsx --test test/**/*.test.ts",
-    "knowledge:factpages": "tsx knowledge_graph/scripts/print_factpages_knowledge.ts"
+    "test:business": "tsx --test test/business/**/*.test.ts",
+    "knowledge:factpages": "tsx knowledge_graph/scripts/print_factpages_knowledge.ts",
+    "mcp:inspect": "npx @modelcontextprotocol/inspector npx tsx src/app/main.ts"
   },
   "repository": {
     "type": "git",

@@ -114,6 +114,78 @@ export const WELLBORE_FACTPAGES_SECTION: FactpagesSectionMetadata = {
         },
       ],
     },
+    {
+      slug: 'development',
+      label: 'Development',
+      description: 'Development-stage and appraisal context around the main wellbore records.',
+      aiPurpose:
+        'Use this group for development, appraisal, and project-level context when the user needs to move from exploration records into downstream development activity.',
+      tables: [
+        {
+          key: 'development',
+          label: 'Development overview',
+          route: 'wellbore_development_overview',
+          category: 'all_tables',
+          explanation: 'A development-oriented view that contextualizes wellbores with project and appraisal progress.',
+          aiSummary:
+            'Use this view when the user asks about development projects, appraisal progress, or the downstream stages associated with a wellbore portfolio.',
+          relatedTerms: ['development', 'appraisal', 'project', 'field development'],
+          useCases: ['Understand development-stage context.', 'Review appraisal or project activity near the exploration set.'],
+          queryHints: ['development', 'appraisal', 'project', 'development wells'],
+          urlTemplate:
+            'https://factpages.sodir.no/public?/Factpages/external/tableview/{route}&rs:Command=Render&rc:Toolbar=false&rc:Parameters=f&IpAddress=not_used&CultureCode={culture}&rs:Format=CSV&Top100=false',
+          source: 'Factpages wellbore public export endpoint.',
+        },
+      ],
+    },
+    {
+      slug: 'other',
+      label: 'Other',
+      description: 'Auxiliary or alternative wellbore views outside the standard drilling and time-window slices.',
+      aiPurpose:
+        'Use this group for secondary or ancillary operational views that do not fit the main exploration summary tables but still belong to the broader wellbore domain.',
+      tables: [
+        {
+          key: 'other',
+          label: 'Other wellbore views',
+          route: 'wellbore_other_views',
+          category: 'all_tables',
+          explanation: 'An auxiliary wellbore category for secondary views, contextual tables, and related operational records.',
+          aiSummary:
+            'Use this table when the request is about ancillary wellbore views, supplemental operational context, or alternative table lenses beyond the main exploration sets.',
+          relatedTerms: ['other', 'supplementary', 'auxiliary', 'additional view'],
+          useCases: ['Browse secondary wellbore views.', 'Find alternative context around the primary exploration tables.'],
+          queryHints: ['other', 'supplementary', 'auxiliary', 'additional context'],
+          urlTemplate:
+            'https://factpages.sodir.no/public?/Factpages/external/tableview/{route}&rs:Command=Render&rc:Toolbar=false&rc:Parameters=f&IpAddress=not_used&CultureCode={culture}&rs:Format=CSV&Top100=false',
+          source: 'Factpages wellbore public export endpoint.',
+        },
+      ],
+    },
+    {
+      slug: 'co2_storage',
+      label: 'CO2 storage',
+      description: 'Carbon storage and subsurface containment context linked to the wider wellbore domain.',
+      aiPurpose:
+        'Use this group when the question crosses the wellbore dataset with CO2 storage, subsurface containment, or related carbon-storage interpretation.',
+      tables: [
+        {
+          key: 'co2_storage',
+          label: 'CO2 storage overview',
+          route: 'wellbore_co2_storage_overview',
+          category: 'all_tables',
+          explanation: 'A carbon-storage context view positioned alongside the wellbore portfolio for containment, storage, and subsurface assessment.',
+          aiSummary:
+            'Use this view for questions about carbon storage, storage capacity, or the broader subsurface context associated with wellbore activity.',
+          relatedTerms: ['co2 storage', 'carbon storage', 'storage', 'subsurface containment'],
+          useCases: ['Review carbon storage context.', 'Link wellbore activity to subsurface storage or containment analysis.'],
+          queryHints: ['co2 storage', 'carbon storage', 'storage', 'containment'],
+          urlTemplate:
+            'https://factpages.sodir.no/public?/Factpages/external/tableview/{route}&rs:Command=Render&rc:Toolbar=false&rc:Parameters=f&IpAddress=not_used&CultureCode={culture}&rs:Format=CSV&Top100=false',
+          source: 'Factpages wellbore public export endpoint.',
+        },
+      ],
+    },
   ],
   tables: FACTPAGES_WELLBORE_TABLES,
 };

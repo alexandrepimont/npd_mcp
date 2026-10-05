@@ -9,12 +9,7 @@ import {
   buildFactpagesCsvUrl,
   fetchFactpagesTable,
 } from '../factpages/client.js';
-import { answerWellboreBusinessQuestion } from '../domain/wellbore/business.js';
-
-export const server = new McpServer({
-  name: '@alexandrepimont/npd-mcp',
-  version: '0.0.1',
-});
+import { enrichWellboreTable, suggestWellboreJoins } from '../domain/wellbore/business.js';
 
 type McpTextContent = {
   type: 'text';
@@ -64,74 +59,75 @@ function withMcpErrorHandling<TArgs>(handler: (args?: TArgs) => Promise<unknown>
   };
 }
 
-server.registerTool(
-  'list_factpages_tables',
-  {
-    description: 'List the Factpages wellbore exploration tables that are directly available via CSV export endpoints.',
-  },
-  withMcpErrorHandling(async () => {
-    return FACTPAGES_TABLES.map((table) => ({
-      key: table.key,
-      label: table.label,
-      route: table.route,
-      category: table.category,
-    }));
-  }),
-);
+export function createMcpServer(): McpServer {
+  const server = new McpServer({
+    name: '@alexandrepimont/npd-mcp',
+    version: '0.0.1',
+  });
 
-server.registerTool(
-  'fetch_factpages_table',
-  {
-    description: 'Fetch a Factpages wellbore exploration table as structured CSV rows using the public export endpoint.',
-    inputSchema: {
-      table: z.string().describe('Table key such as all, all_short, current_year, last_year, or last_10_years.'),
-      limit: z.number().int().positive().max(MAX_FACTPAGES_FETCH_LIMIT).optional().describe('Maximum number of rows to return.'),
-      culture: z.enum(['en', 'nb-no']).optional().describe('Language code for the export endpoint.'),
+  server.registerTool(
+    'list_factpages_tables',
+    {
+      description: 'List the Factpages wellbore exploration tables that are directly available via CSV export endpoints.',
     },
-  },
-  withMcpErrorHandling(async ({
-    table,
-    limit = DEFAULT_FACTPAGES_FETCH_LIMIT,
-    culture = 'en',
-  }: {
-    table: string;
-    limit?: number;
-    culture?: FactpagesCulture;
-  }) => {
-    const rows = await fetchFactpagesTable(table, { limit, culture });
+    withMcpErrorHandling(async () => {
+      return FACTPAGES_TABLES.map((table) => ({
+        key: table.key,
+        label: table.label,
+        route: table.route,
+        category: table.category,
+      }));
+    }),
+  );
 
-    return {
+  server.registerTool(
+    'fetch_factpages_table',
+    {
+      description: 'Fetch a Factpages wellbore exploration table as structured CSV rows using the public export endpoint.',
+      inputSchema: {
+        table: z.string().describe('Table key such as all, all_short, current_year, last_year, or last_10_years.'),
+        limit: z.number().int().positive().max(MAX_FACTPAGES_FETCH_LIMIT).optional().describe('Maximum number of rows to return.'),
+        culture: z.enum(['en', 'nb-no']).optional().describe('Language code for the export endpoint.'),
+      },
+    },
+    withMcpErrorHandling(async ({
       table,
-      culture,
-      source: buildFactpagesCsvUrl(table, culture),
-      rowCount: rows.length,
-      rows,
-    };
-  }),
-);
+      limit = DEFAULT_FACTPAGES_FETCH_LIMIT,
+      culture = 'en',
+    }: {
+      table: string;
+      limit?: number;
+      culture?: FactpagesCulture;
+    }) => {
+      const rows = await fetchFactpagesTable(table, { limit, culture });
 
-server.registerTool(
-  'ask_wellbore_business_question',
-  {
-    description: 'Plan and answer wellbore business questions using semantic metric selection, deterministic aggregation, and source provenance.',
-    inputSchema: {
-      question: z.string().describe('Business question to answer using the Factpages data.'),
-      table: z
-        .string()
-        .optional()
-        .describe('Optional table key. If omitted, the planner selects the best table from question hints.'),
-      limit: z.number().int().positive().max(MAX_BUSINESS_QUESTION_LIMIT).optional().describe('Maximum number of rows to use in the business summary.'),
+      return {
+        table,
+        culture,
+        source: buildFactpagesCsvUrl(table, culture),
+        rowCount: rows.length,
+        rows,
+      };
+    }),
+  );
+
+  server.registerTool(
+    'suggest_wellbore_join',
+    {
+      description: 'Return the curated, business-relevant join suggestions for a wellbore table. These are the only supported joins for enrichment.',
+      inputSchema: {
+        table: z.string().describe('Base table key to enrich, such as all, all_short, current_year, last_year, or last_10_years.'),
+      },
     },
-  },
-  withMcpErrorHandling(async ({
-    question,
-    table,
-    limit = 100,
-  }: {
-    question: string;
-    table?: string;
-    limit?: number;
-  }) => {
-    return answerWellboreBusinessQuestion(question, { table, limit });
-  }),
-);
+    withMcpErrorHandling(async ({
+      table,
+    }: {
+      table: string;
+    }) => {
+      return suggestWellboreJoins(table);
+    }),
+  );
+  return server;
+}
+
+export const server = createMcpServer();

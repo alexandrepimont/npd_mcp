@@ -6,14 +6,44 @@ import {
   normalizeFactpagesLimit,
   normalizeTableKey,
 } from '../../factpages/client.ts';
-import { WELLBORE_METRICS, scoreMetricSignals, type MetricDefinition } from '../../semantic/metrics.ts';
+
+export type JoinStep = {
+  fromTable: FactpagesTableKey;
+  toTable: FactpagesTableKey;
+  relationship: 'time_window' | 'subset' | 'same_wellbore' | 'overview';
+  on: string[];
+  reason: string;
+  score: number;
+};
+
+export type TableJoinPlan = {
+  baseTable: FactpagesTableKey;
+  focus: 'curated';
+  tableReason: string;
+  joins: JoinStep[];
+  reachableTables: FactpagesTableKey[];
+};
+
+export type EnrichedTableResult = {
+  plan: TableJoinPlan;
+  provenance: {
+    source: string;
+    selectedTable: FactpagesTableKey;
+    selectedTableLabel: string;
+    fetchedRowCount: number;
+    usedColumns: string[];
+    generatedAt: string;
+  };
+  reachableTables: FactpagesTableKey[];
+  sampleRows: Record<string, string>[];
+};
 
 export type BusinessPlan = {
   table: FactpagesTableKey;
   tableReason: string;
   metricId: string;
   metricReason: string;
-  intent: MetricDefinition['intent'];
+  intent: 'overview' | 'ranking' | 'distribution' | 'trend';
 };
 
 export type BusinessAnswer = {
@@ -36,79 +66,112 @@ export type BusinessAnswer = {
     generatedAt: string;
   };
   confidence: number;
+  reachableTables: FactpagesTableKey[];
 };
+
+const CURATED_JOIN_MAP: Record<FactpagesTableKey, JoinStep[]> = {
+  all: [
+    {
+      fromTable: 'all',
+      toTable: 'current_year',
+      relationship: 'time_window',
+      on: ['wlbWellboreName', 'wlbEntryYear'],
+      reason: 'Enrich the full dataset with the latest reporting window so the newest drilling activity is visible alongside the full well list.',
+      score: 9,
+    },
+    {
+      fromTable: 'all',
+      toTable: 'last_year',
+      relationship: 'time_window',
+      on: ['wlbWellboreName', 'wlbEntryYear'],
+      reason: 'Compare the full history with the previous year to identify year-over-year changes in drilling and status.',
+      score: 8,
+    },
+    {
+      fromTable: 'all',
+      toTable: 'last_10_years',
+      relationship: 'time_window',
+      on: ['wlbWellboreName', 'wlbEntryYear'],
+      reason: 'Add the multi-year trend lens so the complete dataset is contextualized against long-run exploration patterns.',
+      score: 7,
+    },
+  ],
+  all_short: [
+    {
+      fromTable: 'all_short',
+      toTable: 'current_year',
+      relationship: 'time_window',
+      on: ['wlbWellboreName', 'wlbEntryYear'],
+      reason: 'Use the short table as a fast overview and enrich it with the current year to flag recent drilling priorities.',
+      score: 8,
+    },
+    {
+      fromTable: 'all_short',
+      toTable: 'last_year',
+      relationship: 'time_window',
+      on: ['wlbWellboreName', 'wlbEntryYear'],
+      reason: 'Compare a quick overview with the previous year to spot recent changes without loading the full long-list.',
+      score: 7,
+    },
+  ],
+  current_year: [
+    {
+      fromTable: 'current_year',
+      toTable: 'last_year',
+      relationship: 'time_window',
+      on: ['wlbWellboreName', 'wlbEntryYear'],
+      reason: 'Use the previous year as the principal benchmark for current-year operator, status, and area shifts.',
+      score: 9,
+    },
+    {
+      fromTable: 'current_year',
+      toTable: 'all',
+      relationship: 'overview',
+      on: ['wlbWellboreName'],
+      reason: 'Join back to the full dataset when you need a complete well context behind the current-year slice.',
+      score: 7,
+    },
+  ],
+  last_year: [
+    {
+      fromTable: 'last_year',
+      toTable: 'current_year',
+      relationship: 'time_window',
+      on: ['wlbWellboreName', 'wlbEntryYear'],
+      reason: 'Compare the prior year directly with the current year to surface changes in operator activity and status.',
+      score: 9,
+    },
+    {
+      fromTable: 'last_year',
+      toTable: 'all',
+      relationship: 'overview',
+      on: ['wlbWellboreName'],
+      reason: 'Use the full well list as a background dataset when the annual slice needs broader ownership or basin context.',
+      score: 7,
+    },
+  ],
+  last_10_years: [
+    {
+      fromTable: 'last_10_years',
+      toTable: 'current_year',
+      relationship: 'time_window',
+      on: ['wlbWellboreName', 'wlbEntryYear'],
+      reason: 'Place the newest year inside the longer trend to spot whether activity is accelerating or decelerating.',
+      score: 9,
+    },
+    {
+      fromTable: 'last_10_years',
+      toTable: 'last_year',
+      relationship: 'time_window',
+      on: ['wlbWellboreName', 'wlbEntryYear'],
+      reason: 'Use the prior year as the nearest annual checkpoint for interpreting the recent decade.',
+      score: 8,
+    },
+  ],
+} as const;
 
 function normalize(text: string): string {
   return text.trim().toLowerCase();
-}
-
-function resolveTableFromQuestion(question: string): { table: FactpagesTableKey; reason: string } {
-  const normalizedQuestion = normalize(question);
-  let bestMatch: { key: FactpagesTableKey; score: number; reason: string } | null = null;
-
-  for (const table of FACTPAGES_TABLES) {
-    const signals = [...table.queryHints, ...table.relatedTerms, table.label.toLowerCase(), table.key];
-    const score = signals.reduce((accumulator, signal) => {
-      const normalizedSignal = normalize(signal);
-      return normalizedQuestion.includes(normalizedSignal) ? accumulator + 1 : accumulator;
-    }, 0);
-
-    if (!bestMatch || score > bestMatch.score) {
-      bestMatch = {
-        key: table.key as FactpagesTableKey,
-        score,
-        reason:
-          score > 0
-            ? `Matched table hints from question against ${table.key}.`
-            : 'No explicit table signal in question. Falling back to default full dataset.',
-      };
-    }
-  }
-
-  if (bestMatch && bestMatch.score > 0) {
-    return { table: bestMatch.key, reason: bestMatch.reason };
-  }
-
-  return {
-    table: 'all',
-    reason: 'No explicit table signal in question. Using all records for broad business coverage.',
-  };
-}
-
-function resolveMetricFromQuestion(question: string, table: FactpagesTableKey): { metric: MetricDefinition; reason: string; score: number } {
-  const supported = WELLBORE_METRICS.filter((metric) => metric.supportedTables.includes(table));
-  let best = supported[0];
-  let bestScore = -1;
-
-  for (const metric of supported) {
-    const score = scoreMetricSignals(metric, question);
-    if (score > bestScore) {
-      best = metric;
-      bestScore = score;
-    }
-  }
-
-  if (bestScore > 0) {
-    return {
-      metric: best,
-      score: bestScore,
-      reason: `Metric selected from semantic signal match score ${bestScore}.`,
-    };
-  }
-
-  const fallback = supported.find((metric) => metric.id === 'wellbore_count') ?? supported[0];
-  return {
-    metric: fallback,
-    score: 0,
-    reason: 'No strong metric signal in question. Using stable overview metric.',
-  };
-}
-
-function computeConfidence(signalScore: number, rowCount: number): number {
-  const scoreFactor = Math.min(signalScore, 4) * 0.12;
-  const volumeFactor = rowCount > 0 ? 0.22 : 0;
-  const confidence = 0.45 + scoreFactor + volumeFactor;
-  return Number(Math.min(0.95, confidence).toFixed(2));
 }
 
 function resolveExplicitTable(table: string): { table: FactpagesTableKey; reason: string } {
@@ -126,16 +189,66 @@ function resolveExplicitTable(table: string): { table: FactpagesTableKey; reason
   };
 }
 
+export function planTableJoins(table: string): TableJoinPlan {
+  const base = resolveExplicitTable(table);
+  const joins = CURATED_JOIN_MAP[base.table] ?? [];
+
+  const reachable = Array.from(
+    new Set(joins.flatMap((join) => [join.toTable, ...(CURATED_JOIN_MAP[join.toTable] ?? []).map((step) => step.toTable)])),
+  ) as FactpagesTableKey[];
+
+  const orderedJoins = [...joins].sort((left, right) => right.score - left.score);
+
+  return {
+    baseTable: base.table,
+    focus: 'curated',
+    tableReason: `${base.reason} This curated join plan is the supported enrichment path for ${base.table}.`,
+    joins: orderedJoins,
+    reachableTables: reachable,
+  };
+}
+
+export function suggestWellboreJoins(table: string): TableJoinPlan {
+  return planTableJoins(table);
+}
+
+export function enrichWellboreTable(
+  table: string,
+  options: { limit?: number },
+): Promise<EnrichedTableResult> {
+  return (async () => {
+    const plan = planTableJoins(table);
+    const rows = await fetchFactpagesTable(plan.baseTable, { limit: normalizeFactpagesLimit(options.limit ?? 100) });
+    const tableMetadata = FACTPAGES_TABLES.find((item) => item.key === plan.baseTable);
+    const usedColumns = Array.from(
+      new Set(plan.joins.flatMap((join) => join.on).concat(Object.keys(rows[0] ?? {}))),
+    );
+
+    return {
+      plan,
+      provenance: {
+        source: buildFactpagesCsvUrl(plan.baseTable),
+        selectedTable: plan.baseTable,
+        selectedTableLabel: tableMetadata?.label ?? plan.baseTable,
+        fetchedRowCount: rows.length,
+        usedColumns,
+        generatedAt: new Date().toISOString(),
+      },
+      reachableTables: plan.reachableTables,
+      sampleRows: rows.slice(0, 3),
+    };
+  })();
+}
+
 export function planBusinessQuestion(question: string, table?: string): BusinessPlan {
-  const tablePlan = table ? resolveExplicitTable(table) : resolveTableFromQuestion(question);
-  const metricPlan = resolveMetricFromQuestion(question, tablePlan.table);
+  const tablePlan = table ? resolveExplicitTable(table) : { table: 'all', reason: 'No explicit table signal in question. Using all records for broad business coverage.' };
 
   return {
     table: tablePlan.table,
     tableReason: tablePlan.reason,
-    metricId: metricPlan.metric.id,
-    metricReason: metricPlan.reason,
-    intent: metricPlan.metric.intent,
+    metricId: 'table_join_plan',
+    metricReason: 'Business meaning shifted from single-question metricing to table enrichment and reachability planning.',
+    intent: 'distribution',
   };
 }
 
@@ -143,32 +256,37 @@ export async function answerWellboreBusinessQuestion(
   question: string,
   options: { table?: string; limit?: number },
 ): Promise<BusinessAnswer> {
-  const plan = planBusinessQuestion(question, options.table);
-  const metric = WELLBORE_METRICS.find((item) => item.id === plan.metricId) ?? WELLBORE_METRICS[0];
-  const rows = await fetchFactpagesTable(plan.table, { limit: normalizeFactpagesLimit(options.limit ?? 100) });
-  const metricResult = metric.compute(rows);
-  const tableMetadata = FACTPAGES_TABLES.find((table) => table.key === plan.table);
-  const signalScore = scoreMetricSignals(metric, question);
+  const baseTable = options.table ?? 'all';
+  const plan = planTableJoins(baseTable);
+  const rows = await fetchFactpagesTable(baseTable, { limit: normalizeFactpagesLimit(options.limit ?? 100) });
+  const tableMetadata = FACTPAGES_TABLES.find((item) => item.key === baseTable);
 
   return {
     question,
-    plan,
+    plan: {
+      table: baseTable,
+      tableReason: plan.tableReason,
+      metricId: 'table_join_plan',
+      metricReason: 'Join-oriented business model: enrich dataset by generating reachable tables and related joins.',
+      intent: 'distribution',
+    },
     result: {
-      metricId: metric.id,
-      metricLabel: metric.label,
-      metricDescription: metric.description,
-      kind: metricResult.kind,
-      value: metricResult.value,
-      sampleRows: metricResult.sampleRows,
+      metricId: 'table_join_plan',
+      metricLabel: 'Table join plan',
+      metricDescription: 'A curated join plan that enriches the selected table with related Factpages tables.',
+      kind: 'distribution',
+      value: plan.joins.map((join) => ({ name: join.toTable, count: join.score })),
+      sampleRows: rows.slice(0, 3),
     },
     provenance: {
-      source: buildFactpagesCsvUrl(plan.table),
-      selectedTable: plan.table,
-      selectedTableLabel: tableMetadata?.label ?? plan.table,
+      source: buildFactpagesCsvUrl(baseTable),
+      selectedTable: baseTable,
+      selectedTableLabel: tableMetadata?.label ?? baseTable,
       fetchedRowCount: rows.length,
-      usedColumns: metric.requiredColumns,
+      usedColumns: Array.from(new Set(plan.joins.flatMap((join) => join.on))),
       generatedAt: new Date().toISOString(),
     },
-    confidence: computeConfidence(signalScore, rows.length),
+    confidence: 0.9,
+    reachableTables: plan.reachableTables,
   };
 }
